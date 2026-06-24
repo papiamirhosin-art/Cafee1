@@ -1,66 +1,1083 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="fa">
 <head>
-    <meta charset="UTF-8">
-    <style>
-        :root { --bg: #f9f7f2; --card: #ffffff; --text: #333; --accent: #8d7355; }
-        body.dark { --bg: #1a1a1a; --card: #252525; --text: #e0e0e0; --accent: #c5a059; }
-        body { background: var(--bg); color: var(--text); margin: 0; font-family: Tahoma, sans-serif; transition: 0.3s; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>امیر حسین پاپی — 3D World</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 
-        header { height: 300px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        
-        /* استایل Sticky */
-        .sticky-nav { 
-            position: sticky; top: 0; background: var(--bg); padding: 15px; 
-            z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center;
-        }
+* { margin:0; padding:0; box-sizing:border-box; }
 
-        .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; padding: 40px; max-width: 1000px; margin: auto; }
-        .card { background: var(--card); padding: 20px; border-radius: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); transition: 0.4s; }
-        
-        .theme-btn { cursor: pointer; padding: 10px 20px; border-radius: 20px; border: none; background: var(--accent); color: white; }
-    </style>
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'Share Tech Mono', monospace;
+  cursor: none;
+}
+
+#c { display:block; width:100vw; height:100vh; }
+
+/* ── CUSTOM CURSOR ── */
+#cur {
+  position:fixed; width:16px; height:16px;
+  border:2px solid #0ff; border-radius:50%;
+  pointer-events:none; z-index:9999;
+  transform:translate(-50%,-50%);
+  transition: width .2s, height .2s, border-color .2s;
+  box-shadow: 0 0 10px #0ff, 0 0 20px #0ff4;
+  mix-blend-mode: screen;
+}
+#cur.hover { width:32px; height:32px; border-color:#f0f; box-shadow:0 0 16px #f0f, 0 0 32px #f0f4; }
+#cur-dot {
+  position:fixed; width:4px; height:4px;
+  background:#0ff; border-radius:50%;
+  pointer-events:none; z-index:9999;
+  transform:translate(-50%,-50%);
+}
+
+/* ── LOADING ── */
+#loading {
+  position:fixed; inset:0; background:#000;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  z-index:8000; transition:opacity .8s;
+}
+#loading h1 {
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(20px,4vw,42px);
+  color:#0ff;
+  text-shadow:0 0 20px #0ff, 0 0 60px #0ff4;
+  letter-spacing:6px;
+  margin-bottom:10px;
+  animation: flicker 3s infinite;
+}
+#loading p { color:#0f06; font-size:13px; letter-spacing:3px; margin-bottom:40px; }
+#load-bar-wrap {
+  width:300px; height:2px;
+  background:rgba(0,255,255,.1);
+  border:1px solid #0ff3;
+}
+#load-bar { height:100%; background:#0ff; width:0%; transition:width .1s; box-shadow:0 0 10px #0ff; }
+#load-pct { color:#0ff8; font-size:11px; letter-spacing:2px; margin-top:10px; }
+
+/* ── HUD ── */
+#hud {
+  position:fixed; inset:0; pointer-events:none; z-index:100;
+}
+
+/* corners */
+.corner {
+  position:absolute; width:24px; height:24px;
+  border-color:#0ff4; border-style:solid;
+}
+.corner.tl { top:20px;left:20px; border-width:2px 0 0 2px; }
+.corner.tr { top:20px;right:20px; border-width:2px 2px 0 0; }
+.corner.bl { bottom:20px;left:20px; border-width:0 0 2px 2px; }
+.corner.br { bottom:20px;right:20px; border-width:0 2px 2px 0; }
+
+#hud-name {
+  position:absolute; top:28px; left:50%;
+  transform:translateX(-50%);
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(11px,1.5vw,16px);
+  color:#0ff; letter-spacing:6px;
+  text-shadow:0 0 10px #0ff;
+  text-transform:uppercase;
+}
+
+#hud-title {
+  position:absolute; top:50px; left:50%;
+  transform:translateX(-50%);
+  font-size:10px; color:#0ff6; letter-spacing:3px;
+}
+
+/* bottom status bar */
+#status-bar {
+  position:absolute; bottom:20px; left:50%;
+  transform:translateX(-50%);
+  display:flex; gap:32px; align-items:center;
+}
+.status-item { font-size:10px; color:#0ff5; letter-spacing:2px; }
+.status-item span { color:#0ff; }
+
+/* controls hint */
+#controls {
+  position:absolute; bottom:60px; left:28px;
+  font-size:10px; color:#0ff4; line-height:2;
+  letter-spacing:1px;
+}
+
+/* scan line */
+#scanline {
+  position:absolute; inset:0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 3px,
+    rgba(0,255,255,.012) 3px,
+    rgba(0,255,255,.012) 4px
+  );
+  pointer-events:none;
+}
+
+/* vignette */
+#vignette {
+  position:absolute; inset:0;
+  background: radial-gradient(ellipse at center,
+    transparent 55%,
+    rgba(0,0,20,.7) 100%
+  );
+}
+
+/* ── PANEL ── */
+#panel {
+  position:fixed; right:-420px; top:0; bottom:0;
+  width:380px; background:rgba(0,5,15,.92);
+  border-left:1px solid #0ff3;
+  backdrop-filter:blur(20px);
+  z-index:500; transition:right .5s cubic-bezier(.16,1,.3,1);
+  padding:60px 36px 36px;
+  overflow-y:auto;
+  pointer-events:all;
+}
+#panel.open { right:0; }
+#panel-close {
+  position:absolute; top:20px; right:20px;
+  background:none; border:1px solid #0ff4;
+  color:#0ff; width:32px; height:32px;
+  border-radius:4px; cursor:pointer;
+  font-size:16px; font-family:inherit;
+  transition:all .2s;
+}
+#panel-close:hover { background:#0ff2; }
+
+#panel h2 {
+  font-family:'Orbitron',sans-serif;
+  font-size:18px; color:#0ff;
+  text-shadow:0 0 10px #0ff;
+  letter-spacing:3px; margin-bottom:6px;
+}
+#panel .p-sub {
+  font-size:10px; color:#0ff5;
+  letter-spacing:2px; margin-bottom:28px;
+  padding-bottom:20px;
+  border-bottom:1px solid #0ff2;
+}
+#panel-body { font-size:13px; color:#adf; line-height:1.9; }
+#panel-body h3 {
+  font-family:'Orbitron',sans-serif;
+  font-size:12px; color:#0ff;
+  letter-spacing:2px; margin:20px 0 8px;
+}
+#panel-body .tag {
+  display:inline-block;
+  border:1px solid #0ff4; color:#0ff;
+  font-size:10px; padding:3px 10px;
+  border-radius:2px; margin:3px 3px 3px 0;
+}
+#panel-body a {
+  display:inline-block; margin-top:20px;
+  background:linear-gradient(90deg,#0ff,#f0f);
+  color:#000; font-weight:700; font-family:'Orbitron',sans-serif;
+  font-size:11px; letter-spacing:2px;
+  padding:10px 24px; border-radius:2px;
+  text-decoration:none; transition:opacity .2s;
+}
+#panel-body a:hover { opacity:.8; }
+
+/* ── TOOLTIP ── */
+#tooltip {
+  position:fixed; pointer-events:none; z-index:200;
+  background:rgba(0,5,15,.9);
+  border:1px solid #0ff4;
+  padding:8px 16px;
+  font-size:11px; color:#0ff;
+  letter-spacing:2px;
+  transform:translate(16px,-50%);
+  opacity:0; transition:opacity .2s;
+  white-space:nowrap;
+}
+
+@keyframes flicker {
+  0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:.4} 94%{opacity:1} 96%{opacity:.7} 97%{opacity:1}
+}
+</style>
 </head>
 <body>
+    
 
-<header>
-    <h1>کافه مدرن</h1>
-    <button class="theme-btn" onclick="document.body.classList.toggle('dark')">تغییر تم</button>
-</header>
+<!-- Canvas -->
+<canvas id="c"></canvas>
 
-<div class="sticky-nav" id="filters"></div>
+<!-- HUD -->
+<div id="hud">
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+  <div id="hud-name">Amir Hossein Papi</div>
+  <div id="hud-title">// Full Stack Designer & Developer</div>
+  <div id="controls">
+    🖱 DRAG — Orbit<br>
+    🖱 SCROLL — Zoom<br>
+    👆 CLICK — Interact
+  </div>
+  <div id="status-bar">
+    <div class="status-item">SYS <span>ONLINE</span></div>
+    <div class="status-item">ENV <span>CYBERPUNK</span></div>
+    <div class="status-item">OBJ <span id="obj-count">0</span></div>
+    <div class="status-item">FPS <span id="fps">60</span></div>
+  </div>
+  <div id="scanline"></div>
+  <div id="vignette"></div>
+</div>
 
-<div class="menu-grid" id="menu"></div>
+<!-- Side Panel -->
+<div id="panel">
+  <button id="panel-close">✕</button>
+  <h2 id="panel-title">OBJECT</h2>
+  <div class="p-sub" id="panel-sub">// LOADING DATA</div>
+  <div id="panel-body"></div>
+</div>
+
+<!-- Tooltip -->
+<div id="tooltip" id="tooltip"></div>
+<!-- Custom Cursor -->
+<div id="cur"></div>
+<div id="cur-dot"></div>
 
 <script>
-    const data = [
-        { name: "اسپرسو دبل", cat: "نوشیدنی", price: "۸۵,۰۰۰" },
-        { name: "لاته وانیلی", cat: "نوشیدنی", price: "۱۲۰,۰۰۰" },
-        { name: "چیزکیک", cat: "دسر", price: "۱۱۰,۰۰۰" },
-        { name: "کروسان", cat: "دسر", price: "۹۰,۰۰۰" }
-    ];
+// ════════════════════════════════════════════════════
+//  LOADING SEQUENCE
+// ════════════════════════════════════════════════════
+const loadBar = document.getElementById('load-bar');
+const loadPct = document.getElementById('load-pct');
+let loadVal = 0;
+const loadInterval = setInterval(() => {
+  loadVal += Math.random() * 8 + 2;
+  if (loadVal >= 100) { loadVal = 100; clearInterval(loadInterval); }
+  loadBar.style.width = loadVal + '%';
+  loadPct.textContent = Math.floor(loadVal) + '%';
+  if (loadVal >= 100) {
+    setTimeout(() => {
+      const el = document.getElementById('loading');
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 800);
+    }, 400);
+  }
+}, 60);
 
-    function render(filter = "همه") {
-        const filtered = filter === "همه" ? data : data.filter(i => i.cat === filter);
-        const menu = document.getElementById('menu');
-        
-        menu.innerHTML = filtered.map(item => `
-            <div class="card">
-                <h3>${item.name}</h3>
-                <p class="price">${item.price} تومان</p>
-            </div>
-        `).join('');
+// ════════════════════════════════════════════════════
+//  CURSOR
+// ════════════════════════════════════════════════════
+const cur = document.getElementById('cur');
+const curDot = document.getElementById('cur-dot');
+let curX=0,curY=0,dotX=0,dotY=0;
 
-        // اسکرول نرم به ابتدای محصولات
-        document.getElementById('menu').scrollIntoView({ behavior: 'smooth' });
+document.addEventListener('mousemove', e => {
+  curX = e.clientX; curY = e.clientY;
+  curDot.style.left = curX+'px'; curDot.style.top = curY+'px';
+});
+
+function animateCursor() {
+  dotX += (curX - dotX) * .15;
+  dotY += (curY - dotY) * .15;
+  cur.style.left = dotX+'px'; cur.style.top = dotY+'px';
+  requestAnimationFrame(animateCursor);
+}
+animateCursor();
+
+// ════════════════════════════════════════════════════
+//  THREE.JS SETUP
+// ════════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000510, 0.025);
+scene.background = new THREE.Color(0x000510);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 4, 12);
+camera.lookAt(0, 0, 0);
+
+// ── ORBIT CONTROLS (manual) ──
+let isDragging = false, prevMouse = {x:0,y:0};
+let spherical = { theta: 0, phi: Math.PI/3, r: 12 };
+let targetSpherical = { ...spherical };
+let camTarget = new THREE.Vector3(0, 0.5, 0);
+
+canvas.addEventListener('mousedown', e => { isDragging=true; prevMouse={x:e.clientX,y:e.clientY}; });
+window.addEventListener('mouseup', () => isDragging=false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevMouse.x;
+  const dy = e.clientY - prevMouse.y;
+  targetSpherical.theta -= dx * 0.008;
+  targetSpherical.phi = Math.max(0.2, Math.min(Math.PI/2.2, targetSpherical.phi + dy * 0.006));
+  prevMouse = {x:e.clientX,y:e.clientY};
+});
+window.addEventListener('wheel', e => {
+  targetSpherical.r = Math.max(5, Math.min(22, targetSpherical.r + e.deltaY * 0.01));
+});
+
+// ════════════════════════════════════════════════════
+//  LIGHTS
+// ════════════════════════════════════════════════════
+// Ambient
+scene.add(new THREE.AmbientLight(0x0a1020, 3));
+
+// Main overhead
+const mainLight = new THREE.DirectionalLight(0x1a3060, 2);
+mainLight.position.set(5, 10, 5);
+mainLight.castShadow = true;
+mainLight.shadow.mapSize.width = 1024;
+mainLight.shadow.mapSize.height = 1024;
+scene.add(mainLight);
+
+// Neon lights
+function neonLight(color, x, y, z, intensity=6, dist=12) {
+  const l = new THREE.PointLight(color, intensity, dist);
+  l.position.set(x,y,z);
+  scene.add(l);
+  return l;
+}
+
+const lights = {
+  cyan1:   neonLight(0x00ffff, -6, 3, -4, 8, 16),
+  magenta: neonLight(0xff00ff, 6, 2, -4, 6, 14),
+  blue:    neonLight(0x0044ff, 0, 5, 6, 4, 12),
+  cyan2:   neonLight(0x00ffcc, -3, 1, 4, 5, 10),
+  purple:  neonLight(0x6600ff, 4, 3, 2, 4, 10),
+};
+
+// ════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════
+function hex(c) { return new THREE.Color(c); }
+
+function mat(color, emissive=0x000000, emissiveI=0, rough=0.3, metal=0.8, opacity=1, wire=false) {
+  return new THREE.MeshStandardMaterial({
+    color: hex(color), emissive: hex(emissive),
+    emissiveIntensity: emissiveI,
+    roughness: rough, metalness: metal,
+    transparent: opacity<1, opacity,
+    wireframe: wire,
+  });
+}
+
+function box(w,h,d, material, x=0,y=0,z=0, rx=0,ry=0,rz=0, shadow=true) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), material);
+  m.position.set(x,y,z); m.rotation.set(rx,ry,rz);
+  if(shadow){m.castShadow=true;m.receiveShadow=true;}
+  scene.add(m); return m;
+}
+
+function cyl(rt,rb,h,seg, material, x=0,y=0,z=0, shadow=true) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg), material);
+  m.position.set(x,y,z);
+  if(shadow){m.castShadow=true;m.receiveShadow=true;}
+  scene.add(m); return m;
+}
+
+function sph(r,ws,hs, material, x=0,y=0,z=0) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r,ws,hs), material);
+  m.position.set(x,y,z); m.castShadow=true;
+  scene.add(m); return m;
+}
+
+function tor(r,tube,rs,ts, material, x=0,y=0,z=0) {
+  const m = new THREE.Mesh(new THREE.TorusGeometry(r,tube,rs,ts), material);
+  m.position.set(x,y,z); m.castShadow=true;
+  scene.add(m); return m;
+}
+
+function neonTube(from, to, color, r=0.03) {
+  const dir = new THREE.Vector3().subVectors(to, from);
+  const len = dir.length();
+  const mid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
+  const m = new THREE.Mesh(
+    new THREE.CylinderGeometry(r,r,len,8),
+    new THREE.MeshStandardMaterial({ color:hex(color), emissive:hex(color), emissiveIntensity:3, roughness:0.1, metalness:0 })
+  );
+  m.position.copy(mid);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+  scene.add(m); return m;
+}
+
+function makeText(text, size=0.5, color=0x00ffff, x=0,y=0,z=0, ry=0) {
+  // Canvas texture text
+  const canvas2 = document.createElement('canvas');
+  canvas2.width = 512; canvas2.height = 128;
+  const ctx = canvas2.getContext('2d');
+  ctx.fillStyle = 'transparent';
+  ctx.clearRect(0,0,512,128);
+  ctx.font = `bold ${Math.floor(128*0.55)}px 'Orbitron', monospace`;
+  ctx.fillStyle = '#' + hex(color).getHexString();
+  ctx.shadowColor = '#' + hex(color).getHexString();
+  ctx.shadowBlur = 20;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 256, 64);
+
+  const tex = new THREE.CanvasTexture(canvas2);
+  const ratio = 512/128;
+  const pw = size*ratio; const ph = size;
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(pw, ph),
+    new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthWrite:false, side:THREE.DoubleSide })
+  );
+  m.position.set(x,y,z); m.rotation.y=ry;
+  scene.add(m); return m;
+}
+
+// ════════════════════════════════════════════════════
+//  FLOOR & GRID
+// ════════════════════════════════════════════════════
+// Floor
+const floorMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(40,40),
+  new THREE.MeshStandardMaterial({
+    color:hex(0x010818), roughness:0.1, metalness:0.9,
+  })
+);
+floorMesh.rotation.x = -Math.PI/2;
+floorMesh.receiveShadow = true;
+scene.add(floorMesh);
+
+// Grid lines (neon)
+function gridLines() {
+  const mat2 = new THREE.LineBasicMaterial({ color:0x003344, transparent:true, opacity:0.6 });
+  const geo = new THREE.BufferGeometry();
+  const pts = [];
+  for(let i=-20;i<=20;i+=1) {
+    pts.push(i,0.005,-20, i,0.005,20);
+    pts.push(-20,0.005,i, 20,0.005,i);
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts,3));
+  const lines = new THREE.LineSegments(geo, mat2);
+  scene.add(lines);
+}
+gridLines();
+
+// Grid glow lines (thicker, further apart)
+function gridGlow() {
+  const g = new THREE.LineBasicMaterial({ color:0x004466, transparent:true, opacity:0.4 });
+  const geo = new THREE.BufferGeometry();
+  const pts = [];
+  for(let i=-20;i<=20;i+=5) {
+    pts.push(i,0.01,-20, i,0.01,20);
+    pts.push(-20,0.01,i, 20,0.01,i);
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts,3));
+  scene.add(new THREE.LineSegments(geo, g));
+}
+gridGlow();
+
+// ════════════════════════════════════════════════════
+//  BACK WALL
+// ════════════════════════════════════════════════════
+const wallM = mat(0x020a18, 0x000000, 0, 0.9, 0.1);
+box(30, 10, 0.3, wallM, 0,5,-9);
+
+// Wall horizontal neon strips
+neonTube(new THREE.Vector3(-14,2,-8.8), new THREE.Vector3(14,2,-8.8), 0x00ffff, 0.04);
+neonTube(new THREE.Vector3(-14,8,-8.8), new THREE.Vector3(14,8,-8.8), 0xff00ff, 0.04);
+neonTube(new THREE.Vector3(-14,5,-8.8), new THREE.Vector3(-8,5,-8.8), 0x0088ff, 0.03);
+neonTube(new THREE.Vector3(8,5,-8.8), new THREE.Vector3(14,5,-8.8), 0x0088ff, 0.03);
+
+// Side walls
+box(0.3,10,18, mat(0x020a18,0x000000,0,0.9,0.1), -9,5,0);
+box(0.3,10,18, mat(0x020a18,0x000000,0,0.9,0.1), 9,5,0);
+
+// Left wall neon
+neonTube(new THREE.Vector3(-8.85,2,-9), new THREE.Vector3(-8.85,2,9), 0x00ffcc, 0.03);
+neonTube(new THREE.Vector3(8.85,2,-9), new THREE.Vector3(8.85,2,9), 0xff00cc, 0.03);
+
+// Ceiling strips
+neonTube(new THREE.Vector3(-6,9.9,-8), new THREE.Vector3(-6,9.9,8), 0x0044ff, 0.04);
+neonTube(new THREE.Vector3(6,9.9,-8), new THREE.Vector3(6,9.9,8), 0x4400ff, 0.04);
+neonTube(new THREE.Vector3(0,9.9,-8), new THREE.Vector3(0,9.9,8), 0x00ffff, 0.02);
+
+// ════════════════════════════════════════════════════
+//  DESK
+// ════════════════════════════════════════════════════
+const deskMat = mat(0x0d1a2e,0x001122,0.2,0.3,0.9);
+const deskGlowMat = mat(0x001133,0x00ffff,0.8,0.1,0.5);
+
+// Desk top
+const desk = box(7,0.15,2.5, deskMat, 0,1.85,0);
+
+// Desk legs
+const legM = mat(0x0a1522,0x001122,0.1,0.4,1);
+box(0.12,1.8,0.12,legM, -3.3,0.9,-1); box(0.12,1.8,0.12,legM, 3.3,0.9,-1);
+box(0.12,1.8,0.12,legM, -3.3,0.9,1); box(0.12,1.8,0.12,legM, 3.3,0.9,1);
+
+// Desk neon strip under
+neonTube(new THREE.Vector3(-3.4,1.78,-1.26), new THREE.Vector3(3.4,1.78,-1.26), 0x00ffff, 0.025);
+
+// ════════════════════════════════════════════════════
+//  MONITORS
+// ════════════════════════════════════════════════════
+function monitor(x,y,z, ry=0, screenColor=0x001133, label='MONITOR', w=2.2, h=1.3) {
+  const grp = new THREE.Group();
+  // Frame
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(w+0.1, h+0.1, 0.08),
+    mat(0x0a0f1a,0x111111,0.1,0.5,0.9));
+  grp.add(frame);
+  // Screen
+  const screen = new THREE.Mesh(new THREE.BoxGeometry(w,h,0.06),
+    new THREE.MeshStandardMaterial({
+      color:hex(screenColor), emissive:hex(screenColor),
+      emissiveIntensity:1.2, roughness:0.1, metalness:0
+    }));
+  screen.position.z = 0.01;
+  grp.add(screen);
+  // Screen content texture
+  const sc2 = document.createElement('canvas');
+  sc2.width=512; sc2.height=300;
+  const sctx = sc2.getContext('2d');
+  sctx.fillStyle='#000814';
+  sctx.fillRect(0,0,512,300);
+  // scanlines
+  for(let i=0;i<300;i+=4){
+    sctx.fillStyle='rgba(0,255,255,0.03)';
+    sctx.fillRect(0,i,512,2);
+  }
+  // text lines
+  sctx.font='bold 22px monospace';
+  sctx.fillStyle='#00ffff';
+  sctx.shadowColor='#00ffff'; sctx.shadowBlur=8;
+  sctx.fillText('> ' + label, 20, 40);
+  sctx.font='13px monospace';
+  sctx.fillStyle='#00cc88';
+  sctx.shadowBlur=4;
+  const lines = getScreenLines(label);
+  lines.forEach((l,i) => sctx.fillText(l, 20, 75+i*22));
+  const stex = new THREE.CanvasTexture(sc2);
+  const screenFace = new THREE.Mesh(new THREE.PlaneGeometry(w*0.92,h*0.88),
+    new THREE.MeshBasicMaterial({map:stex,transparent:true}));
+  screenFace.position.z=0.065;
+  grp.add(screenFace);
+  // Stand
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.1,0.5,8),
+    mat(0x0a0f1a,0x000000,0,0.5,1));
+  stand.position.y = -(h/2+0.3);
+  grp.add(stand);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.04,16),
+    mat(0x0a0f1a,0x000000,0,0.5,1));
+  base.position.y = -(h/2+0.55);
+  grp.add(base);
+
+  grp.position.set(x,y,z);
+  grp.rotation.y = ry;
+  grp.traverse(c=>{if(c.isMesh){c.castShadow=true;}});
+  scene.add(grp);
+  return grp;
+}
+
+function getScreenLines(label) {
+  const map = {
+    'ABOUT': ['// Full Stack Designer', '// React · Next.js · Node', '// Available for projects','// Tehran, Iran','// 5+ years exp'],
+    'SKILLS': ['React ████████░░ 95%','Node  ███████░░░ 88%','UI/UX ████████░░ 92%','GLSL  ██████░░░░ 75%','DB    ███████░░░ 85%'],
+    'PROJECTS': ['> e-commerce platform','> AI dashboard','> design system','> SaaS portal','> 40+ delivered'],
+    'CONTACT': ['amirhossein@dev.io','@AHP_codes','github.com/ahpapi','Available NOW','Response: 24h'],
+  };
+  return map[label] || ['> SYSTEM ONLINE','> READY'];
+}
+
+// Main center monitor (large)
+const monCenter = monitor(0, 3.55, -1.2, 0, 0x000b1a, 'PROJECTS', 3.2, 1.8);
+// Left monitor
+const monLeft = monitor(-2.4, 3.15, -0.95, 0.3, 0x000a14, 'ABOUT', 2, 1.2);
+// Right monitor
+const monRight = monitor(2.4, 3.15, -0.95, -0.3, 0x000814, 'SKILLS', 2, 1.2);
+
+// ════════════════════════════════════════════════════
+//  KEYBOARD
+// ════════════════════════════════════════════════════
+const kbM = mat(0x0a1020,0x001122,0.15,0.4,0.8);
+const kb = box(2.2,0.07,0.8, kbM, 0,1.94,0.6);
+// key rows
+for(let r=0;r<3;r++) for(let c=0;c<10;c++) {
+  box(0.17,0.05,0.17,
+    mat(0x0d1830, r===0&&c===5?0x00ffff:0x001122, r===0&&c===5?0.8:0.1, 0.3,0.7),
+    -0.95+c*0.21, 1.975, 0.45+r*0.21
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  CHAIR
+// ════════════════════════════════════════════════════
+const chairM = mat(0x0a0d14,0x001133,0.05,0.6,0.4);
+// seat
+box(1.4,0.12,1.4, chairM, 0,0.65,2.8);
+// back
+box(1.4,1.6,0.1, chairM, 0,1.55,3.42);
+// arms
+box(0.1,0.5,1.3, chairM, -0.7,0.95,2.85);
+box(0.1,0.5,1.3, chairM, 0.7,0.95,2.85);
+// legs + wheels
+[[0.55,0.55],[−0.55,0.55],[0.55,-0.55],[-0.55,-0.55]].forEach(([ox,oz])=>{
+  const lx = ox||0; const lz = oz||0; // safe guard
+});
+cyl(0.04,0.04,0.55,8, mat(0x080c12,0x000000,0,.4,1), -0.5,0.32,2.3);
+cyl(0.04,0.04,0.55,8, mat(0x080c12,0x000000,0,.4,1), 0.5,0.32,2.3);
+cyl(0.04,0.04,0.55,8, mat(0x080c12,0x000000,0,.4,1), -0.5,0.32,3.3);
+cyl(0.04,0.04,0.55,8, mat(0x080c12,0x000000,0,.4,1), 0.5,0.32,3.3);
+// chair neon
+neonTube(new THREE.Vector3(-0.7,1.4,3.37), new THREE.Vector3(0.7,1.4,3.37), 0x00ffff, 0.03);
+neonTube(new THREE.Vector3(-0.7,0.68,3.37), new THREE.Vector3(-0.7,0.68,2.43), 0x00ffff, 0.02);
+neonTube(new THREE.Vector3(0.7,0.68,3.37), new THREE.Vector3(0.7,0.68,2.43), 0x00ffff, 0.02);
+
+// ════════════════════════════════════════════════════
+//  BOOKSHELF (LEFT WALL)
+// ════════════════════════════════════════════════════
+const shelfM = mat(0x0a1422,0x000000,0,0.5,0.7);
+box(0.15,4,1.2, shelfM, -7.8,3,−1); // left panel
+box(0.15,4,1.2, shelfM, -6.2,3,−1); // right panel
+box(1.6,0.1,1.2, shelfM, -7,1.5,-1);
+box(1.6,0.1,1.2, shelfM, -7,3,-1);
+box(1.6,0.1,1.2, shelfM, -7,4.5,-1);
+
+// Books
+const bookColors = [0x00ffcc,0xff00aa,0x0066ff,0x ffcc00,0xff4400,0x00ff88];
+const booksActual = [0x00ffcc,0xff00aa,0x0066ff,0xffcc00,0xff4400,0x00ff88];
+booksActual.forEach((c,i) => {
+  const bw = 0.15+Math.random()*0.1;
+  box(bw,0.65,0.9,
+    mat(c,c,0.4,0.6,0.2),
+    -7.65+i*0.22, 2.17, -1.05
+  );
+});
+booksActual.forEach((c,i) => {
+  box(0.13+Math.random()*0.1,0.55,0.9,
+    mat(c,c,0.3,0.6,0.2),
+    -7.6+i*0.22, 3.67,-1.05
+  );
+});
+
+// Shelf neon
+neonTube(new THREE.Vector3(-7.85,1.5,-1.6),new THREE.Vector3(-6.15,1.5,-1.6), 0x00ffcc, 0.025);
+neonTube(new THREE.Vector3(-7.85,3,-1.6),new THREE.Vector3(-6.15,3,-1.6), 0xff00cc, 0.025);
+
+// ════════════════════════════════════════════════════
+//  SERVER RACK (RIGHT WALL)
+// ════════════════════════════════════════════════════
+const rackM = mat(0x080e1a,0x000000,0,0.4,0.9);
+box(1.4,4,0.8, rackM, 7,2.5,-2);
+// Rack units
+for(let i=0;i<8;i++) {
+  const unitCol = i%3===0?0x00ffff:i%3===1?0xff00ff:0x0044ff;
+  box(1.2,0.3,0.1, mat(0x0a1020,unitCol,0.6+Math.random()*0.4,0.3,0.7),
+    7,1+i*0.45,-1.56);
+  // blink lights
+  sph(0.04,6,6, mat(unitCol,unitCol,3,0,0), 7.4,1+i*0.45,-1.56);
+}
+
+// Server neon border
+neonTube(new THREE.Vector3(6.3,0.5,-2.41),new THREE.Vector3(6.3,4.5,-2.41), 0x00ffff,0.03);
+neonTube(new THREE.Vector3(7.7,0.5,-2.41),new THREE.Vector3(7.7,4.5,-2.41), 0x00ffff,0.03);
+neonTube(new THREE.Vector3(6.3,0.5,-2.41),new THREE.Vector3(7.7,0.5,-2.41), 0x00ffff,0.03);
+neonTube(new THREE.Vector3(6.3,4.5,-2.41),new THREE.Vector3(7.7,4.5,-2.41), 0x00ffff,0.03);
+
+// ════════════════════════════════════════════════════
+//  HOLOGRAPHIC GLOBE (floating left)
+// ════════════════════════════════════════════════════
+const globeGroup = new THREE.Group();
+globeGroup.position.set(-5.5, 4, 1);
+scene.add(globeGroup);
+
+const globeCore = new THREE.Mesh(
+  new THREE.SphereGeometry(0.6,32,32),
+  new THREE.MeshStandardMaterial({color:hex(0x001133),emissive:hex(0x002266),emissiveIntensity:1,roughness:0.1,metalness:0.5,transparent:true,opacity:0.7})
+);
+globeGroup.add(globeCore);
+
+// Lat/lon lines
+for(let i=0;i<8;i++) {
+  const lat = new THREE.Mesh(
+    new THREE.TorusGeometry(0.6,0.008,6,64),
+    new THREE.MeshBasicMaterial({color:0x00ffcc,transparent:true,opacity:0.6})
+  );
+  lat.rotation.x = (i/8)*Math.PI;
+  globeGroup.add(lat);
+}
+for(let i=0;i<6;i++){
+  const lon=new THREE.Mesh(
+    new THREE.TorusGeometry(0.6,0.006,6,64),
+    new THREE.MeshBasicMaterial({color:0x0088ff,transparent:true,opacity:0.5})
+  );
+  lon.rotation.y=(i/6)*Math.PI;
+  globeGroup.add(lon);
+}
+
+// Globe rings
+for(let i=0;i<3;i++){
+  const gr=new THREE.Mesh(
+    new THREE.TorusGeometry(0.75+i*0.15,0.01,6,80),
+    new THREE.MeshBasicMaterial({color:i===0?0x00ffff:i===1?0xff00ff:0x0044ff,transparent:true,opacity:0.6-i*0.1})
+  );
+  gr.rotation.x = i*0.4; gr.rotation.z=i*0.3;
+  globeGroup.add(gr);
+}
+
+// ════════════════════════════════════════════════════
+//  FLOATING CODE CUBE
+// ════════════════════════════════════════════════════
+const cubeGroup = new THREE.Group();
+cubeGroup.position.set(5.5,4,1);
+scene.add(cubeGroup);
+
+const cubeCore = new THREE.Mesh(
+  new THREE.BoxGeometry(0.9,0.9,0.9),
+  mat(0x001122,0x0044ff,0.5,0.2,0.8,0.8)
+);
+cubeGroup.add(cubeCore);
+
+const cubeWire = new THREE.Mesh(
+  new THREE.BoxGeometry(0.9,0.9,0.9),
+  new THREE.MeshBasicMaterial({color:0x00ffff,wireframe:true,transparent:true,opacity:0.8})
+);
+cubeGroup.add(cubeWire);
+
+// Orbit rings around cube
+for(let i=0;i<3;i++){
+  const cr=new THREE.Mesh(
+    new THREE.TorusGeometry(1.0+i*0.2,0.015,6,60),
+    new THREE.MeshBasicMaterial({color:[0x00ffff,0xff00ff,0x0088ff][i],transparent:true,opacity:0.7})
+  );
+  cr.rotation.x=i*Math.PI/3; cr.rotation.z=i*Math.PI/4;
+  cubeGroup.add(cr);
+}
+
+// ════════════════════════════════════════════════════
+//  PARTICLES / DUST
+// ════════════════════════════════════════════════════
+const pCount = 600;
+const pPos = new Float32Array(pCount*3);
+const pCol = new Float32Array(pCount*3);
+const pCols = [[0,1,1],[1,0,1],[0,0.5,1],[0,1,0.8]];
+for(let i=0;i<pCount;i++){
+  pPos[i*3]=(Math.random()-0.5)*18;
+  pPos[i*3+1]=Math.random()*9;
+  pPos[i*3+2]=(Math.random()-0.5)*18;
+  const c=pCols[Math.floor(Math.random()*pCols.length)];
+  pCol[i*3]=c[0];pCol[i*3+1]=c[1];pCol[i*3+2]=c[2];
+}
+const pGeo=new THREE.BufferGeometry();
+pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
+pGeo.setAttribute('color',new THREE.BufferAttribute(pCol,3));
+const particles=new THREE.Points(pGeo,
+  new THREE.PointsMaterial({size:0.035,vertexColors:true,transparent:true,opacity:0.7}));
+scene.add(particles);
+
+// ════════════════════════════════════════════════════
+//  WALL SIGNS (neon text)
+// ════════════════════════════════════════════════════
+makeText('AMIR HOSSEIN PAPI', 0.55, 0x00ffff, 0, 7.8, -8.7);
+makeText('FULL STACK DESIGNER', 0.35, 0xff00ff, 0, 7.0, -8.7);
+
+// Neon sign frame
+neonTube(new THREE.Vector3(-4,6.5,-8.7),new THREE.Vector3(4,6.5,-8.7),0x00ffff,0.035);
+neonTube(new THREE.Vector3(-4,8.5,-8.7),new THREE.Vector3(4,8.5,-8.7),0x00ffff,0.035);
+neonTube(new THREE.Vector3(-4,6.5,-8.7),new THREE.Vector3(-4,8.5,-8.7),0x00ffff,0.035);
+neonTube(new THREE.Vector3(4,6.5,-8.7),new THREE.Vector3(4,8.5,-8.7),0x00ffff,0.035);
+
+// Corner decorations
+makeText('[ OPEN TO WORK ]', 0.28, 0x00ff88, -6.5, 5.5, -8.7);
+makeText('EST. 1400', 0.22, 0xff8800, 6.2, 5.5, -8.7);
+
+// ════════════════════════════════════════════════════
+//  AMBIENT DECORATION: Vertical pipes
+// ════════════════════════════════════════════════════
+[[-8.5,0,−7],[-8.5,0,−2],[-8.5,0,3],[8.5,0,-7],[8.5,0,-2],[8.5,0,3]].forEach(([x,y,z])=>{
+  const lz = z||0;
+  cyl(0.06,0.06,8,8,mat(0x0a1020,0x001122,0.1,0.4,0.9),x,4,lz);
+});
+
+// ════════════════════════════════════════════════════
+//  COFFEE MUG
+// ════════════════════════════════════════════════════
+const mugGroup = new THREE.Group();
+mugGroup.position.set(2.8,1.94,0.2);
+scene.add(mugGroup);
+
+const mugBody = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.14,0.11,0.28,20),
+  mat(0x0a0f1a,0x00ffff,0.2,0.3,0.7)
+);
+mugGroup.add(mugBody);
+const mugTop = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.14,0.14,0.02,20),
+  new THREE.MeshStandardMaterial({color:hex(0x001133),emissive:hex(0x00ffff),emissiveIntensity:0.8,roughness:0.1})
+);
+mugTop.position.y=0.15;
+mugGroup.add(mugTop);
+
+// Steam particles
+for(let i=0;i<3;i++){
+  const steam=new THREE.Mesh(
+    new THREE.SphereGeometry(0.03,6,6),
+    new THREE.MeshBasicMaterial({color:0x88aaff,transparent:true,opacity:0.3})
+  );
+  steam.position.set((Math.random()-.5)*0.08, 0.25+i*0.12, 0);
+  steam.userData.steamIndex = i;
+  mugGroup.add(steam);
+}
+
+// ════════════════════════════════════════════════════
+//  PHONE on desk
+// ════════════════════════════════════════════════════
+const phoneGroup = new THREE.Group();
+phoneGroup.position.set(-2.5,1.945,0.3);
+phoneGroup.rotation.y=0.3;
+scene.add(phoneGroup);
+box(0.35,0.02,0.65,mat(0x0a0f1a,0x000000,0,0.2,0.9),0,0,0);
+const phoneScreen=new THREE.Mesh(new THREE.PlaneGeometry(0.3,0.55),
+  new THREE.MeshStandardMaterial({color:hex(0x000814),emissive:hex(0x0033aa),emissiveIntensity:1.2,roughness:0.1}));
+phoneScreen.rotation.x=-Math.PI/2;
+phoneScreen.position.y=0.012;
+phoneGroup.add(phoneScreen);
+
+// ════════════════════════════════════════════════════
+//  INTERACTIVE OBJECTS (clickable)
+// ════════════════════════════════════════════════════
+const interactables = [];
+
+function addInteractable(mesh, label, panelData) {
+  interactables.push({ mesh, label, data: panelData });
+}
+
+// Assign data to monitors
+addInteractable(monCenter, 'PROJECTS', {
+  title:'PROJECTS',
+  sub:'// 40+ Delivered',
+  body:`
+    <h3>FEATURED WORK</h3>
+    <p>پروژه‌هایی که ساختم از ایده تا محصول نهایی:</p>
+    <h3>E-COMMERCE PLATFORM</h3>
+    <p>فروشگاه آنلاین با پنل ادمین، پرداخت و انبارداری هوشمند</p>
+    <span class="tag">Next.js</span><span class="tag">Node.js</span><span class="tag">PostgreSQL</span>
+    <h3>AI DASHBOARD</h3>
+    <p>داشبورد تحلیل داده با ویژوالیزیشن پیشرفته</p>
+    <span class="tag">React</span><span class="tag">D3.js</span><span class="tag">Python</span>
+    <h3>DESIGN SYSTEM</h3>
+    <p>۱۲۰+ کامپوننت برای تیم‌های بزرگ</p>
+    <span class="tag">Figma</span><span class="tag">Storybook</span><span class="tag">TypeScript</span>
+    <a href="#">VIEW ALL PROJECTS →</a>
+  `
+});
+
+addInteractable(monLeft,'ABOUT',{
+  title:'ABOUT ME',
+  sub:'// Amir Hossein Papi',
+  body:`
+    <h3>WHO AM I</h3>
+    <p>یه Full Stack Designer که بین دنیای خلاقیت و کد زندگی می‌کنم. از UI/UX تا بک‌اند قوی.</p>
+    <h3>STACK</h3>
+    <span class="tag">React</span><span class="tag">Next.js</span><span class="tag">Node.js</span>
+    <span class="tag">TypeScript</span><span class="tag">Figma</span><span class="tag">Three.js</span>
+    <span class="tag">PostgreSQL</span><span class="tag">MongoDB</span><span class="tag">Redis</span>
+    <h3>EXPERIENCE</h3>
+    <p>۵+ سال تجربه · ۴۰+ پروژه · ۳۱ کلاینت راضی</p>
+    <a href="#">DOWNLOAD CV →</a>
+  `
+});
+
+addInteractable(monRight,'SKILLS',{
+  title:'SKILLS',
+  sub:'// Tech Stack',
+  body:`
+    <h3>FRONTEND</h3>
+    <p>React / Next.js <span style="color:#0f0">████████░░</span> 95%</p>
+    <p>UI/UX Design <span style="color:#0f0">████████░░</span> 92%</p>
+    <p>Three.js / WebGL <span style="color:#0f0">███████░░░</span> 80%</p>
+    <h3>BACKEND</h3>
+    <p>Node.js / API <span style="color:#0ff">███████░░░</span> 88%</p>
+    <p>Database <span style="color:#0ff">███████░░░</span> 85%</p>
+    <p>DevOps / Cloud <span style="color:#0ff">██████░░░░</span> 75%</p>
+    <h3>DESIGN</h3>
+    <p>Figma <span style="color:#f0f">████████░░</span> 94%</p>
+    <p>Design Systems <span style="color:#f0f">████████░░</span> 92%</p>
+  `
+});
+
+addInteractable(globeGroup,'CONTACT',{
+  title:'CONTACT',
+  sub:'// Let\'s Build Together',
+  body:`
+    <h3>GET IN TOUCH</h3>
+    <p>ایده داری؟ پروژه داری؟ بیا حرف بزنیم.</p>
+    <h3>EMAIL</h3>
+    <p>amirhossein@design.dev</p>
+    <h3>SOCIAL</h3>
+    <span class="tag">GitHub</span><span class="tag">LinkedIn</span><span class="tag">Telegram</span>
+    <h3>AVAILABILITY</h3>
+    <p style="color:#0f0">● OPEN TO WORK — معمولاً ظرف ۲۴ ساعت جواب میدم</p>
+    <a href="mailto:amirhossein@design.dev">SEND MESSAGE →</a>
+  `
+});
+
+addInteractable(cubeGroup,'TECH CUBE',{
+  title:'TECH',
+  sub:'// Innovation Hub',
+  body:`
+    <h3>TECHNOLOGIES</h3>
+    <p>تکنولوژی‌هایی که باهاشون کار می‌کنم:</p>
+    <h3>LANGUAGES</h3>
+    <span class="tag">JavaScript</span><span class="tag">TypeScript</span><span class="tag">Python</span><span class="tag">SQL</span>
+    <h3>FRAMEWORKS</h3>
+    <span class="tag">React</span><span class="tag">Next.js</span><span class="tag">Vue</span><span class="tag">Fastify</span>
+    <h3>TOOLS</h3>
+    <span class="tag">Docker</span><span class="tag">Git</span><span class="tag">Figma</span><span class="tag">Blender</span>
+    <h3>CURRENT LEARNING</h3>
+    <p style="color:#0ff">→ WebGPU · Rust · AI/ML Integration</p>
+  `
+});
+
+// obj count
+document.getElementById('obj-count').textContent = interactables.length;
+
+// ════════════════════════════════════════════════════
+//  RAYCASTER
+// ════════════════════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+const mouse2d = new THREE.Vector2();
+
+function getHovered(e) {
+  mouse2d.x = (e.clientX/innerWidth)*2-1;
+  mouse2d.y = -(e.clientY/innerHeight)*2+1;
+  raycaster.setFromCamera(mouse2d, camera);
+  let hit = null;
+  for(const obj of interactables) {
+    const meshes = [];
+    obj.mesh.traverse(c=>{ if(c.isMesh) meshes.push(c); });
+    const ints = raycaster.intersectObjects(meshes);
+    if(ints.length>0) { hit=obj; break; }
+  }
+  return hit;
+}
+
+const tooltip = document.getElementById('tooltip');
+window.addEventListener('mousemove', e => {
+  const hit = getHovered(e);
+  if(hit) {
+    cur.classList.add('hover');
+    tooltip.style.opacity='1';
+    tooltip.style.left=e.clientX+'px';
+    tooltip.style.top=e.clientY+'px';
+    tooltip.textContent='[ CLICK ] ' + hit.label;
+  } else {
+    cur.classList.remove('hover');
+    tooltip.style.opacity='0';
+  }
+});
+
+canvas.addEventListener('click', e => {
+  const hit = getHovered(e);
+  if(hit) openPanel(hit.data);
+});
+
+function openPanel(data) {
+  document.getElementById('panel-title').textContent = data.title;
+  document.getElementById('panel-sub').textContent = data.sub;
+  document.getElementById('panel-body').innerHTML = data.body;
+  document.getElementById('panel').classList.add('open');
+}
+
+document.getElementById('panel-close').addEventListener('click',()=>{
+  document.getElementById('panel').classList.remove('open');
+});
+
+// ════════════════════════════════════════════════════
+//  ANIMATE
+// ════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+let frames=0, lastFpsTime=0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // FPS counter
+  frames++;
+  if(t-lastFpsTime>1){
+    document.getElementById('fps').textContent=frames;
+    frames=0; lastFpsTime=t;
+  }
+
+  // Smooth orbit
+  spherical.theta += (targetSpherical.theta - spherical.theta) * 0.08;
+  spherical.phi   += (targetSpherical.phi   - spherical.phi)   * 0.08;
+  spherical.r     += (targetSpherical.r     - spherical.r)     * 0.08;
+
+  camera.position.x = spherical.r * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+  camera.position.y = spherical.r * Math.cos(spherical.phi) + 1;
+  camera.position.z = spherical.r * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+  camera.lookAt(camTarget);
+
+  // Globe
+  globeGroup.rotation.y = t*0.3;
+  globeGroup.position.y = 4+Math.sin(t*0.8)*0.15;
+
+  // Cube
+  cubeGroup.rotation.x = t*0.4;
+  cubeGroup.rotation.y = t*0.6;
+  cubeGroup.position.y = 4+Math.cos(t*0.9)*0.15;
+
+  // Particles drift
+  const pp = pGeo.attributes.position.array;
+  for(let i=0;i<pCount;i++){
+    pp[i*3+1] += 0.003;
+    if(pp[i*3+1]>9) pp[i*3+1]=0;
+    pp[i*3] += Math.sin(t*0.3+i)*0.0005;
+  }
+  pGeo.attributes.position.needsUpdate=true;
+
+  // Steam
+  mugGroup.children.forEach(c=>{
+    if(c.userData.steamIndex!==undefined){
+      c.position.y = 0.25 + c.userData.steamIndex*0.12 + Math.sin(t*2+c.userData.steamIndex)*0.03;
+      c.position.x = Math.sin(t*1.5+c.userData.steamIndex*2)*0.04;
+      c.material.opacity = 0.2+Math.sin(t+c.userData.steamIndex)*0.15;
     }
+  });
 
-    const cats = ["همه", ...new Set(data.map(i => i.cat))];
-    document.getElementById('filters').innerHTML = cats.map(c => 
-        `<button class="theme-btn" style="margin:5px" onclick="render('${c}')">${c}</button>`
-    ).join('');
+  // Neon light pulse
+  lights.cyan1.intensity  = 7+Math.sin(t*1.3)*2;
+  lights.magenta.intensity= 5+Math.cos(t*1.7)*2;
+  lights.cyan2.intensity  = 4+Math.sin(t*2.1)*1.5;
+  lights.purple.intensity = 3+Math.cos(t*0.9)*1;
 
-    render();
+  // Server blink
+  scene.traverse(c=>{
+    if(c.isMesh && c.geometry.type==='SphereGeometry' && c.geometry.parameters?.radius===0.04) {
+      c.material.emissiveIntensity = 2+Math.sin(t*3+c.position.y*10)*1.5;
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// ════════════════════════════════════════════════════
+//  RESIZE
+// ════════════════════════════════════════════════════
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
 </script>
 </body>
 </html>
